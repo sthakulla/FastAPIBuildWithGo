@@ -54,37 +54,73 @@
 // 	http.ListenAndServe(":8080", nil)
 // }
 
+// package main
+
+// import (
+// 	"database/sql"
+// 	"fmt"
+// 	"log"
+// 	"net/http"
+
+// 	_ "github.com/lib/pq"
+// )
+
+// var db *sql.DB
+
+// func init() {
+// 	var err error
+// 	db, err = sql.Open("postgres", "user=username dbname=mydb sslmode=disable")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	db.SetMaxOpenConns(25)
+// 	db.SetMaxIdleConns(25)
+// }
+
+// func helloHandler(w http.ResponseWriter, r *http.Request) {
+// 	var message string
+// 	err := db.QueryRow("SELECT 'Hello, World!'").Scan(&message)
+// 	if err != nil {
+// 		http.Error(w, "Database error", http.StatusInternalServerError)
+// 		return
+// 	}
+// 	fmt.Fprintln(w, message)
+// }
+
+// func main() {
+// 	http.HandleFunc("/hello", helloHandler)
+// 	http.ListenAndServe(":8080", nil)
+// }
+
 package main
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
-	"log"
 	"net/http"
 
-	_ "github.com/lib/pq"
+	"github.com/go-redis/redis/v8"
 )
 
-var db *sql.DB
+var ctx = context.Background()
+var rdb *redis.Client
 
 func init() {
-	var err error
-	db, err = sql.Open("postgres", "user=username dbname=mydb sslmode=disable")
-	if err != nil {
-		log.Fatal(err)
-	}
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
+	rdb = redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
 }
 
 func helloHandler(w http.ResponseWriter, r *http.Request) {
-	var message string
-	err := db.QueryRow("SELECT 'Hello, World!'").Scan(&message)
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+	val, err := rdb.Get(ctx, "hello").Result()
+	if err == redis.Nil {
+		val = "Hello, World!"
+		rdb.Set(ctx, "hello", val, 0)
+	} else if err != nil {
+		http.Error(w, "Redis error", http.StatusInternalServerError)
 		return
 	}
-	fmt.Fprintln(w, message)
+	fmt.Fprintln(w, val)
 }
 
 func main() {
